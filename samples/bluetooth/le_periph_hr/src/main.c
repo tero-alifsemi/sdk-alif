@@ -15,6 +15,8 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/drivers/watchdog.h>
+
 #include "alif_ble.h"
 #include "gapm.h"
 #include "gap_le.h"
@@ -30,11 +32,25 @@
 #include "hrps.h"
 #include "batt_svc.h"
 #include "shared_control.h"
+#include <se_service.h>
 
 #define BODY_SENSOR_LOCATION_CHEST 0x01
 
 /* Define advertising address type */
 #define SAMPLE_ADDR_TYPE	ALIF_STATIC_RAND_ADDR
+
+
+#ifndef WDT_MAX_WINDOW
+#define WDT_MAX_WINDOW  10000U
+#endif
+
+#ifndef WDT_MIN_WINDOW
+#define WDT_MIN_WINDOW  0U
+#endif
+
+#ifndef WDT_OPT
+#define WDT_OPT WDT_OPT_PAUSE_HALTED_BY_DBG
+#endif
 
 /* Store and share advertising address type */
 static uint8_t adv_type;
@@ -63,6 +79,13 @@ static bool ready_to_send;
 
 K_SEM_DEFINE(init_sem, 0, 1);
 K_SEM_DEFINE(conn_sem, 0, 1);
+
+K_THREAD_STACK_DEFINE(feeder_stack, 1024);
+static struct k_thread feeder_s;
+
+void reset_expired(struct k_work *work);
+
+static K_WORK_DELAYABLE_DEFINE(reset_work, reset_expired);
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -488,9 +511,83 @@ void service_process(void)
 	}
 }
 
+void reset_expired(struct k_work *work)
+{
+	se_service_boot_reset_soc();
+}
+
+static void wdt_callback(const struct device *wdt_dev, int channel_id)
+{
+	static bool cb_ok = false;
+	if (cb_ok == true) {
+		return;
+	}
+
+	LOG_DBG("Watchdog CB called\n");
+	wdt_feed(wdt_dev, channel_id);
+
+	/* Reset can't be called from ISR */
+	k_work_reschedule(&reset_work, K_NO_WAIT);
+	cb_ok = true;
+}
+
+
+static void feeder(void *p1, void *p2, void *p3)
+{
+	/* Feed wd every 1 second */
+	const struct device *const wdt = p1;
+	int wdt_channel_id = *(int*)p2;
+
+	while (1) {
+		k_sleep(K_SECONDS(1));
+		wdt_feed(wdt, wdt_channel_id);
+	}
+}
+
 int main(void)
 {
 	uint16_t err;
+	const struct device *const wdt = DEVICE_DT_GET(DT_ALIAS(watchdog0));
+
+	/* Set up watchdog */
+	if (!device_is_ready(wdt)) {
+		LOG_ERR("%s: device not ready.\n", wdt->name);
+		return 0;
+	}
+
+	struct wdt_timeout_cfg wdt_config = {
+		/* Reset SoC when watchdog timer expires. */
+		.flags = WDT_FLAG_RESET_SOC,
+
+		/* Expire watchdog after max window */
+		.window.min = WDT_MIN_WINDOW,
+		.window.max = WDT_MAX_WINDOW,
+	};
+
+	wdt_config.callback = wdt_callback;
+
+	int wdt_channel_id = wdt_install_timeout(wdt, &wdt_config);
+	if (wdt_channel_id < 0) {
+		LOG_ERR("Watchdog install error\n");
+		return 0;
+	}
+
+	err = wdt_setup(wdt, WDT_OPT);
+	if (err < 0) {
+		LOG_ERR("Watchdog setup error\n");
+		return 0;
+	}
+
+	/* Create thread to feed watchdog */
+	k_tid_t tid = k_thread_create(&feeder_s, feeder_stack, 1024,
+			&feeder, (void*)wdt, &wdt_channel_id, NULL,
+			5, 0, K_NO_WAIT);
+	if (tid == NULL) {
+		LOG_ERR("Error creating feeder thread\n");
+	}
+
+	/* Create work for soc reset */
+	k_work_init_delayable(&reset_work, reset_expired);
 
 	/* Start up bluetooth host stack */
 	alif_ble_enable(NULL);
@@ -523,9 +620,17 @@ int main(void)
 	/* Create an advertising activity */
 	create_advertising();
 
+	bool feeder_stopped = false;
+
 	while (1) {
 		k_sleep(K_SECONDS(1));
 		service_process();
 		battery_process();
+		if (feeder_stopped == false) {
+			printk("Kill thread\n");
+			k_thread_abort(tid);
+			feeder_stopped = true;
+		}
+
 	}
 }
