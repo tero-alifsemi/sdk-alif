@@ -66,3 +66,37 @@
 ns: &ns {
 	status = "okay";
 };
+
+/*
+ * Copyright (c) 2024 Alif Semiconductor
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Enable RTC and Set the counter to increment every 1sec
+ */
+&rtc0 {
+	prescaler = < 0 >;
+	status = "okay";
+};
+
+
+/**
+ * Set the console uart frequency to use the HFOSC(38.4)
+&uart4 {
+	clock-frequency = < 38400000 >;
+};
+*/
+
+/ {
+	chosen {
+		zephyr,cortex-m-idle-timer = &rtc0;
+	};
+
+	power-states {
+		off: off {
+			/* 4ms is time reserved for os wakeup and sleep */
+			min-residency-us = < 200000 >;
+		};
+	};
+};
