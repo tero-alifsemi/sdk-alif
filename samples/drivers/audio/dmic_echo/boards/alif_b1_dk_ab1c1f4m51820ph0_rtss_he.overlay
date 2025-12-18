@@ -1,0 +1,55 @@
+/* Copyright (C) Alif Semiconductor - All Rights Reserved.
+ * Use, distribution and modification of this code is permitted under the
+ * terms stated in the Alif Semiconductor Software License Agreement
+ *
+ * You should have received a copy of the Alif Semiconductor Software
+ * License Agreement with this file. If not, please write to:
+ * contact@alifsemi.com, or visit: https://alifsemi.com/license
+ *
+ */
+
+#define I2S0_IRQ_NUM  141
+#define I2S0_IRQ_PRIO 3
+
+/ {
+	aliases {
+		pdm-audio = &lppdm;
+		audio-codec = &wm8904;
+		i2s-tx = &i2s0;
+	};
+};
+
+&lppdm {
+	status = "okay";
+};
+
+&i2c1 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+
+	wm8904: wm8904@1a {
+		compatible = "cirrus,wm8904";
+		reg = <0x1a>;
+		status = "okay";
+	};
+};
+
+&i2s0 {
+	status = "okay";
+};
+
+&pinctrl_i2c1 {
+	group0 {
+		pinmux = <PIN_P7_2__I2C1_SDA_C>,
+			 <PIN_P7_3__I2C1_SCL_C>;
+	};
+};
+
+&pinctrl_i2s0 {
+	group0 {
+		pinmux = <PIN_P2_4__I2S0_SDI_B>,
+			 <PIN_P2_5__I2S0_SDO_B>,
+			 <PIN_P1_7__I2S0_WS_A>,
+			 <PIN_P1_6__I2S0_SCLK_A>;
+	};
+};
