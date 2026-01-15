@@ -10,6 +10,11 @@
 
 #define I2S0_IRQ_NUM  141
 #define I2S0_IRQ_PRIO 3
+#define LPPDM_DMA_CH_1  0
+#define LPPDM_DMA_CH_2  1
+#define LPPDM_DMA_CH_3  2
+#define LPPDM_DMA_CH_4  3
+#define LPPDM_DMA_REQ 30
 
 / {
 	aliases {
@@ -21,6 +26,11 @@
 
 &lppdm {
 	status = "okay";
+	dmas = <&dma2 LPPDM_DMA_CH_1 LPPDM_DMA_REQ>,
+	       <&dma2 LPPDM_DMA_CH_2 LPPDM_DMA_REQ>,
+	       <&dma2 LPPDM_DMA_CH_3 LPPDM_DMA_REQ>,
+	       <&dma2 LPPDM_DMA_CH_4 LPPDM_DMA_REQ>;
+	dma-names = "pdm_dma_1", "pdm_dma_2", "pdm_dma_3", "pdm_dma_4";
 };
 
 &i2c1 {
@@ -52,4 +62,16 @@
 			 <PIN_P1_7__I2S0_WS_A>,
 			 <PIN_P1_6__I2S0_SCLK_A>;
 	};
+};
+
+&dma2 {
+	status = "okay";
+	dma-channels = <8>;
+	interrupts = <0 3>, <1 3>, <2 3>, <3 3>, <4 3>, <5 3>,
+		     <6 3>, <7 3>, <32 3>;
+	interrupt-names = "channel0", "channel1",
+			  "channel2", "channel3",
+			  "channel4", "channel5",
+			  "channel6", "channel7",
+			  "abort";
 };
