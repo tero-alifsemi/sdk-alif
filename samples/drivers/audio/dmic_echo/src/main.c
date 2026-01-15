@@ -72,8 +72,8 @@ void pdm_ch_config(const struct device *pcmj_device)
 
 	pdm_set_ch_phase(pcmj_device, AUDIO_L, PHASE);
 	pdm_set_ch_gain(pcmj_device, AUDIO_L, GAIN);
-	pdm_set_peak_detect_th(pcmj_device, AUDIO_L, PEAK_DETECT_TH);
-	pdm_set_peak_detect_itv(pcmj_device, AUDIO_L, PEAK_DETECT_ITV);
+	//pdm_set_peak_detect_th(pcmj_device, AUDIO_L, PEAK_DETECT_TH);
+	//pdm_set_peak_detect_itv(pcmj_device, AUDIO_L, PEAK_DETECT_ITV);
 	pdm_coef_reg.ch_num = AUDIO_L;
 	memcpy(pdm_coef_reg.ch_fir_coef, fir, sizeof(pdm_coef_reg.ch_fir_coef));
 	pdm_coef_reg.ch_iir_coef = IIR_COEF;
@@ -81,8 +81,8 @@ void pdm_ch_config(const struct device *pcmj_device)
 
 	pdm_set_ch_gain(pcmj_device, AUDIO_R, GAIN);
 	pdm_set_ch_phase(pcmj_device, AUDIO_R, PHASE);
-	pdm_set_peak_detect_th(pcmj_device, AUDIO_R, PEAK_DETECT_TH);
-	pdm_set_peak_detect_itv(pcmj_device, AUDIO_R, PEAK_DETECT_ITV);
+	//pdm_set_peak_detect_th(pcmj_device, AUDIO_R, PEAK_DETECT_TH);
+	//pdm_set_peak_detect_itv(pcmj_device, AUDIO_R, PEAK_DETECT_ITV);
 	pdm_coef_reg.ch_num = AUDIO_R;
 	memcpy(pdm_coef_reg.ch_fir_coef, fir, sizeof(pdm_coef_reg.ch_fir_coef));
 	pdm_coef_reg.ch_iir_coef = IIR_COEF;
@@ -219,4 +219,5 @@ int main(void)
 			break;
 		}
 	}
+	dmic_trigger(dev_rx, DMIC_TRIGGER_STOP);
 }
