@@ -29,10 +29,10 @@
 
 #define I2S_SINK_DEV DEVICE_DT_GET(CODEC_I2S_NODE)
 
-#if DT_NODE_EXISTS(I2S_MIC_NODE)
-#define I2S_SOURCE_DEV DEVICE_DT_GET(I2S_MIC_NODE)
+#if DT_NODE_EXISTS(PDM_MIC_NODE)
+#define PDM_SOURCE_DEV DEVICE_DT_GET(PDM_MIC_NODE)
 #else
-#define I2S_SOURCE_DEV I2S_SINK_DEV
+#define PDM_SOURCE_DEV I2S_SINK_DEV
 #endif
 
 LOG_MODULE_REGISTER(audio_datapath, CONFIG_BLE_AUDIO_LOG_LEVEL);
@@ -62,9 +62,9 @@ static int unicast_audio_path_init(void)
 		return -1;
 	}
 
-	ret = device_is_ready(I2S_SOURCE_DEV);
+	ret = device_is_ready(PDM_SOURCE_DEV);
 	if (!ret) {
-		LOG_ERR("I2S mic is not ready");
+		LOG_ERR("PDM source is not ready");
 		return -1;
 	}
 
@@ -121,15 +121,15 @@ int audio_datapath_create_source(struct audio_datapath_config const *const cfg)
 		LOG_ERR("Failed to get runtime PM for codec I2C device, err %d", ret);
 		return ret;
 	}
-	ret = pm_device_runtime_get(I2S_SOURCE_DEV);
+	ret = pm_device_runtime_get(PDM_SOURCE_DEV);
 	if (ret) {
-		LOG_ERR("Failed to get runtime PM for I2S device, err %d", ret);
+		LOG_ERR("Failed to get runtime PM for PDM source device, err %d", ret);
 		return ret;
 	}
 #endif
 
 	struct audio_encoder_params const enc_params = {
-		.i2s_dev = I2S_SOURCE_DEV,
+		.pdm_dev = PDM_SOURCE_DEV,
 		.frame_duration_us = cfg->frame_duration_is_10ms ? 10000 : 7500,
 		.sampling_rate_hz = cfg->sampling_rate_hz,
 		.audio_buffer_len_us = cfg->pres_delay_us,
@@ -140,7 +140,7 @@ int audio_datapath_create_source(struct audio_datapath_config const *const cfg)
 	if (env.encoder == NULL) {
 #if !CONFIG_PM_DEVICE_SYSTEM_MANAGED
 		pm_device_runtime_put_async(DEVICE_DT_GET(DT_PARENT(CODEC_CFG_NODE)), K_NO_WAIT);
-		pm_device_runtime_put_async(I2S_SOURCE_DEV, K_NO_WAIT);
+		pm_device_runtime_put_async(PDM_SOURCE_DEV, K_NO_WAIT);
 #endif
 
 		LOG_ERR("Failed to create audio encoder");
@@ -200,7 +200,7 @@ int audio_datapath_cleanup_source(void)
 #if !CONFIG_PM_DEVICE_SYSTEM_MANAGED
 	if (env.encoder) {
 		pm_device_runtime_put_async(DEVICE_DT_GET(DT_PARENT(CODEC_CFG_NODE)), K_NO_WAIT);
-		pm_device_runtime_put_async(I2S_SOURCE_DEV, K_NO_WAIT);
+		pm_device_runtime_put_async(PDM_SOURCE_DEV, K_NO_WAIT);
 	}
 #endif
 

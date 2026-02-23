@@ -630,7 +630,7 @@ static int configure_codec(struct unicast_peer *const p_unicast_env)
 		struct unicast_client_ase *const p_ase = &p_unicast_env->ase[iter];
 
 		if (p_ase->ase_lid != GAF_INVALID_LID || p_ase->dir == ASE_DIR_UNKNOWN) {
-			LOG_DBG("ASE %u is invalid - skip", iter);
+			LOG_DBG("ASE %u is invalid - skip %d %d", iter, p_ase->ase_lid, p_ase->dir);
 			continue;
 		}
 

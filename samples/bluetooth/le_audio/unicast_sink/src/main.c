@@ -631,6 +631,9 @@ int main(void)
 {
 	LOG_INF("Alif Unicast Acceptor app started");
 
+	// Puukko
+	power_mgr_disable_sleep();
+
 	if (storage_load_bond_data() < 0) {
 		return -1;
 	}

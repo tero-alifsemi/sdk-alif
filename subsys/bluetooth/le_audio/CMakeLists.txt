@@ -15,6 +15,7 @@ zephyr_library_sources(
     sdu_queue.c
     audio_queue.c
     audio_source_i2s.c
+    audio_source_pdm.c
     audio_sink_i2s.c
     audio_i2s_common.c
     iso_datapath_htoc.c
