@@ -16,7 +16,7 @@ Requirements
 Building and Running
 ********************
 
-This sample is located at :zephyr_file:`samples/modules/tflite-micro/alif_kws` in the sdk-alif tree.
+This sample is located at :zephyr_file:`samples/modules/tflite-micro/alif_inference` in the sdk-alif tree.
 
 To build the sample, you first need to pull in the optional dependencies by running the following commands:
 
