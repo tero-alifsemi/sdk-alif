@@ -23,11 +23,12 @@
 #include <se_service.h>
 #include <es0_power_manager.h>
 
-#include "ke_mem.h"
-
 #include "appl_shell.h"
 #include "power_mgr.h"
 #include "ble_handler.h"
+
+#include <zephyr/drivers/pinctrl.h>
+#include <zephyr/dt-bindings/pinctrl/balletto-pinctrl.h>
 
 #if !defined(CONFIG_SOC_SERIES_B1)
 #error "Application works only with B1 devices"
@@ -170,26 +171,136 @@ uint64_t z_cms_lptim_hook_on_lpm_exit(void)
 }
 #endif /* CONFIG_CORTEX_M_SYSTICK_LPM_TIMER_COUNTER */
 
+/* Pimpelipom */
+static void set_profiles(void)
+{
+    const struct device *uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    int ret;
+    uint32_t baudrate;
+
+	/* Set the default off profile and apply it */
+	get_default_off_cfg(&current_offp);
+	ret = set_off_profile(PM_STATE_MODE_STOP_1);
+	if (ret) {
+		printk("set_off_profile failed: %d\n", ret);
+		return;
+	}
+
+	/* Set the default run profile */
+	/* Profile get is already done in power_mgr_init */
+	ret = app_set_run_params();
+	if (ret) {
+		printk("app_set_run_params failed: %d\n", ret);
+		return;
+	}
+
+	/* reconf UART */
+	ret = uart_line_ctrl_get(uart_dev, UART_LINE_CTRL_BAUD_RATE, &baudrate);
+    if (!ret) {
+            ret = uart_line_ctrl_set(uart_dev, UART_LINE_CTRL_BAUD_RATE, baudrate);
+    } else {
+		printk("Failed to get UART baud rate: %d\n", ret);
+		return;
+	}
+
+}
+
+#define BOOT_PARAM_ID_PLF_DIAG            0xD4
+#define BOOT_PARAM_ID_BLE_DIAG            0xD5
+#define BOOT_PARAM_LEN_PLF_DIAG           4
+#define BOOT_PARAM_LEN_BLE_DIAG           4
+/* Tag, status and length bytes written by write_tlv_int() */
+#define BOOT_PARAM_TLV_HDR_LEN            3
+
+const pinctrl_soc_pin_t pinctrl_ble_dbg[] = {
+	PIN_P7_0__BLE_DBG24 | 0x10000, /*Receiver enabled*/
+	PIN_P7_1__BLE_DBG25 | 0x10000, /*Receiver enabled*/
+	PIN_P7_2__BLE_DBG26 | 0x10000,  /*Receiver enabled*/
+	PIN_P7_3__BLE_DBG27 | 0x10000,  /*Receiver enabled*/
+	PIN_P7_4__BLE_DBG28 | 0x10000,
+	PIN_P7_5__BLE_DBG29 | 0x10000,
+	PIN_P7_6__BLE_DBG30 | 0x10000,
+	PIN_P7_7__BLE_DBG31 | 0x10000};
+	// PIN_P7_7__GPIO| 0x10000
+
+#define DEFAULT_TAG_STATUS (0x00 | 0x02 | 0x04)
+
+static uint8_t *write_tlv_int(uint8_t *target, uint8_t tag, uint32_t value, uint8_t len)
+{
+	*target++ = tag;
+	*target++ = DEFAULT_TAG_STATUS;
+	*target++ = len;
+	if (len == 1) {
+		memcpy(target, (uint8_t *)&value, len);
+	} else if (len == 2) {
+		memcpy(target, (uint16_t *)&value, len);
+	} else {
+		memcpy(target, &value, len);
+	}
+
+	target += len;
+
+	return target;
+}
+
+void set_ble_debug(void)
+{
+	pinctrl_configure_pins(pinctrl_ble_dbg, ARRAY_SIZE(pinctrl_ble_dbg),
+				       PINCTRL_REG_NONE);
+}
+
+uint16_t add_extra_nvds_param_length(void)
+{
+	printk("add_extra_nvds_param_length\n");
+
+#if 0
+	return 0;
+#else
+	return (BOOT_PARAM_TLV_HDR_LEN + BOOT_PARAM_LEN_PLF_DIAG) +
+	       (BOOT_PARAM_TLV_HDR_LEN + BOOT_PARAM_LEN_BLE_DIAG);
+#endif
+}
+
+uint8_t *add_extra_nvds_params(uint8_t *target)
+{
+	printk("add_extra_nvds_params\n");
+#if 0
+	return target;
+#else
+	target = write_tlv_int(target, BOOT_PARAM_ID_PLF_DIAG, 0x90838383 /* plf_diag_configs, 0x90838383 -> HCI Uart out to P7_0 - P7_7 */,
+			    BOOT_PARAM_LEN_PLF_DIAG);
+	target = write_tlv_int(target, BOOT_PARAM_ID_BLE_DIAG, 0x83838383 /* ble_diag_configs, 0x83838383 */,
+			    BOOT_PARAM_LEN_BLE_DIAG);
+
+	return target;
+#endif
+}
+
 int main(void)
 {
 	int ret = 0;
 
 	printk("BLE testapp cold start\n");
 
-	app_set_run_params();
+	// set_profiles();
+
+	set_ble_debug();
 	appl_wait_to_continue();
 
-	ret = ble_init();
 
+	ret = ble_init();
 	if (ret) {
 		printk("ble_init: %d\n", ret);
 		return ret;
 	}
+
 	ret = ble_start();
+
 	if (ret) {
 		printk("ble_start: %d\n", ret);
 		return ret;
 	}
+
 	printk("Init complete!\n");
 
 	while (1) {

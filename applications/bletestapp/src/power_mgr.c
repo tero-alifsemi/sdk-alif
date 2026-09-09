@@ -19,12 +19,10 @@
 #include "power_mgr.h"
 #include "power_defines.h"
 #include "ble_handler.h"
+#include "appl_shell.h"
 
-struct k_timer sleep_end_timer;
-void sleep_period_end(struct k_timer *timer_id);
-void sleep_period_done(struct k_work *work);
-
-K_WORK_DEFINE(sleep_end_worker, sleep_period_done);
+static void sleep_period_worker(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(sleep_dwork, sleep_period_worker);
 
 LOG_MODULE_DECLARE(main, CONFIG_MAIN_LOG_LEVEL);
 
@@ -103,7 +101,6 @@ int select_timer_source(enum lp_counter_source source)
 	if (ret) {
 		LOG_ERR("off profile set failed. error: %d", ret);
 	}
-	k_timer_init(&sleep_end_timer, sleep_period_end, NULL);
 
 	return 0;
 }
@@ -121,22 +118,18 @@ void app_prevent_off(void)
 	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_RAM, PM_ALL_SUBSTATES);
 }
 
-void sleep_period_done(struct k_work *work)
+static void sleep_period_worker(struct k_work *work)
 {
 	const struct shell *shell = shell_backend_uart_get_ptr();
 
-	shell_print(shell, "sleep period done.");
-}
-
-void sleep_period_end(struct k_timer *timer_id)
-{
 	app_prevent_off();
-	k_work_submit(&sleep_end_worker);
+	appl_shell_sleep_period_end();
+	shell_print(shell, "sleep period done.");
 }
 
 void app_sleep_start(uint32_t time_s)
 {
-	k_timer_start(&sleep_end_timer, K_SECONDS(time_s), K_NO_WAIT);
+	k_work_reschedule(&sleep_dwork, K_MSEC((int64_t)time_s * MSEC_PER_SEC));
 	app_ready_for_sleep();
 }
 
@@ -226,8 +219,14 @@ void get_default_run_cfg(run_profile_t *runp)
 	runp->dcdc_voltage = 775;
 	runp->dcdc_mode = DCDC_MODE_PFM_FORCED;
 	runp->aon_clk_src = CLK_SRC_LFXO;
+
+// Whith this conf, logging is not working
+//	runp->run_clk_src = CLK_SRC_HFRC;
+//	runp->cpu_clk_freq = CLOCK_FREQUENCY_76_8_RC_MHZ;
+
 	runp->run_clk_src = CLK_SRC_PLL;
 	runp->cpu_clk_freq = CLOCK_FREQUENCY_160MHZ;
+
 	runp->phy_pwr_gating = 0;
 	runp->ip_clock_gating = 0;
 	runp->vdd_ioflex_3V3 = IOFLEX_LEVEL_1V8;
@@ -247,7 +246,7 @@ void get_default_run_cfg(run_profile_t *runp)
 void get_default_off_cfg(off_profile_t *offp)
 {
 	/* Default is STOP mode */
-	offp->power_domains = PD_VBAT_AON_MASK;
+	offp->power_domains = PD_VBAT_AON_MASK; // | PD_SSE700_AON_MASK;
 /* If CONFIG_FLASH_BASE_ADDRESS is zero application run from itcm and no MRAM needed */
 #if (CONFIG_FLASH_BASE_ADDRESS == 0)
 	offp->memory_blocks = 0;
@@ -286,3 +285,32 @@ int app_set_run_params(void)
 
 	return ret;
 }
+
+/*
+ * CRITICAL: Apply the RUN profile at PRE_KERNEL_1 so the SYST clock (and thus
+ * the UART baud clock) is set before peripherals initialize. Otherwise the UART
+ * divisor is computed against the boot clock and the later switch to the run
+ * clock source corrupts the output.
+ */
+static int app_early_run_cfg(void)
+{
+	int ret;
+
+	get_default_off_cfg(&current_offp);
+	ret = set_off_profile(PM_STATE_MODE_STOP_1);
+	if (ret) {
+		printk("set_off_profile failed: %d\n", ret);
+		return ret;
+	}
+	get_default_run_cfg(&current_runp);
+	ret = app_set_run_params();
+	if (ret) {
+		printk("get_default_run_cfg failed: %d\n", ret);
+		return ret;
+	}
+	return ret;
+}
+
+
+
+SYS_INIT(app_early_run_cfg, PRE_KERNEL_1, 3);

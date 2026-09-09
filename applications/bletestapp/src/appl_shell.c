@@ -37,6 +37,7 @@ void appl_shell_reset(void)
 	ble_conn_int_min = 800;
 	ble_conn_int_max = 800;
 	ble_rtc_wakeup = 20000;
+	ble_rtc_connected_wakeup = 20000;
 	strncpy(app_shell_device_name, "APPL_SHL", DEVICE_NAME_LEN - 1);
 	app_shell_device_name[8] = 0;
 	reset_after_sleep = 0;
