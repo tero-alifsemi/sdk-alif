@@ -226,8 +226,8 @@ void get_default_run_cfg(run_profile_t *runp)
 	runp->dcdc_voltage = 775;
 	runp->dcdc_mode = DCDC_MODE_PFM_FORCED;
 	runp->aon_clk_src = CLK_SRC_LFXO;
-	runp->run_clk_src = CLK_SRC_PLL;
-	runp->cpu_clk_freq = CLOCK_FREQUENCY_160MHZ;
+	runp->run_clk_src = CLK_SRC_HFRC;
+	runp->cpu_clk_freq = CLOCK_FREQUENCY_76_8_RC_MHZ;
 	runp->phy_pwr_gating = 0;
 	runp->ip_clock_gating = 0;
 	runp->vdd_ioflex_3V3 = IOFLEX_LEVEL_1V8;
@@ -247,7 +247,7 @@ void get_default_run_cfg(run_profile_t *runp)
 void get_default_off_cfg(off_profile_t *offp)
 {
 	/* Default is STOP mode */
-	offp->power_domains = PD_VBAT_AON_MASK;
+	offp->power_domains = PD_VBAT_AON_MASK | PD_SSE700_AON_MASK;
 /* If CONFIG_FLASH_BASE_ADDRESS is zero application run from itcm and no MRAM needed */
 #if (CONFIG_FLASH_BASE_ADDRESS == 0)
 	offp->memory_blocks = 0;
@@ -286,3 +286,16 @@ int app_set_run_params(void)
 
 	return ret;
 }
+
+/*
+ * CRITICAL: Apply the RUN profile at PRE_KERNEL_1 so the SYST clock (and thus
+ * the UART baud clock) is set before peripherals initialize. Otherwise the UART
+ * divisor is computed against the boot clock and the later switch to the run
+ * clock source corrupts the output.
+ */
+static int app_early_run_cfg(void)
+{
+	get_default_run_cfg(&current_runp);
+	return app_set_run_params();
+}
+SYS_INIT(app_early_run_cfg, PRE_KERNEL_1, 3);
